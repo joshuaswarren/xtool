@@ -260,6 +260,7 @@ extension Plan.Product {
                 "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain",
                 // Include frameworks that the host app may use
                 "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../Frameworks",
+                "-Xlinker", "-rpath", "-Xlinker", "@executable_path/Frameworks",
             ]),
         ]
         """
