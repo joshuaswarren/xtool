@@ -1,0 +1,57 @@
+name: GSA user-agent regression
+on:
+  workflow_dispatch:
+  push:
+    branches: ['omarchy/**']
+    paths:
+      - 'Sources/XKit/GrandSlam/**'
+      - 'integration-tests/gsa-user-agent.py'
+      - '.github/workflows/gsa-user-agent.yml'
+  pull_request:
+    paths:
+      - 'Sources/XKit/GrandSlam/**'
+      - 'integration-tests/gsa-user-agent.py'
+      - '.github/workflows/gsa-user-agent.yml'
+permissions:
+  contents: read
+concurrency:
+  group: gsa-user-agent-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  linux-source:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the existing Linux environment
+        run: |
+          docker build --target dev -t xtool-auth-base .
+          docker build -t xtool-auth-check - <<'DOCKERFILE'
+          FROM xtool-auth-base
+          RUN apt-get update && apt-get install -y --no-install-recommends python3 openssl && rm -rf /var/lib/apt/lists/*
+          DOCKERFILE
+      - name: Compile the patched source and run unit tests
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          mkdir -p .build/auth-ci
+          docker run --rm --cpus 2 --memory 5g \
+            -v "$PWD:/xtool" -v "$PWD/.build/auth-ci:/xtool/.build" -w /xtool \
+            -e XTL_CI=1 xtool-auth-check bash -ec \
+            'swift build --jobs 2 --product xtool && swift test --jobs 2' 2>&1 | tee swift-check.log
+      - name: Exercise the real client with no external network
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --cpus 1 --memory 2g \
+            -v "$PWD:/xtool:ro" -v "$PWD/.build/auth-ci:/xtool/.build:ro" -w /xtool \
+            xtool-auth-check python3 integration-tests/gsa-user-agent.py \
+            --xtool /xtool/.build/debug/xtool 2>&1 | tee gsa-user-agent.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gsa-user-agent-source-proof
+          path: |
+            swift-check.log
+            gsa-user-agent.log
+          if-no-files-found: ignore
