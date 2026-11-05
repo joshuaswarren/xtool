@@ -25,6 +25,7 @@ jobs:
   upkeep:
     runs-on: ubuntu-latest
     env:
+      PYTHONDONTWRITEBYTECODE: '1'
       # One exclusion policy shared by regeneration and the --check pass so
       # the check can never validate under a different policy than wrote.
       EXTRA_EXCLUDE: ''
