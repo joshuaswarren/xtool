@@ -7,6 +7,7 @@ import Darwin
 import PackLib
 import Subprocess
 import SystemPackage
+import XCLIUtils
 import XUtils
 
 /// Request ids seen so far, so a response can be attributed to its method.
