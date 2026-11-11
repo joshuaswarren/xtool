@@ -6,6 +6,10 @@ name: Contributor registry upkeep
 # with GITHUB_TOKEN do not trigger pull_request workflows, so the run also
 # posts its own `contributors-validation` check on the PR head SHA; that
 # check reports only this validation, never repository CI.
+#
+# Prerequisite: the repository setting "Allow GitHub Actions to create and
+# approve pull requests" (Settings, Actions, General) must be on. With it
+# off, GITHUB_TOKEN cannot open the pull request.
 
 on:
   schedule:
@@ -28,6 +32,9 @@ jobs:
       # One exclusion policy shared by regeneration and the --check pass so
       # the check can never validate under a different policy than wrote.
       EXTRA_EXCLUDE: ''
+      # The unit tests would otherwise leave an untracked __pycache__ that
+      # the single-file diff check below counts as a second changed file.
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       # Always regenerate against the default branch, even when a maintainer
       # picks another ref in workflow_dispatch (a dispatch against a feature
