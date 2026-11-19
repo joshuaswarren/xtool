@@ -17,6 +17,7 @@ jobs:
           - runner: ubuntu-24.04-arm
             arch: aarch64
     runs-on: ${{ matrix.host.runner }}
+    timeout-minutes: 60
     permissions:
       contents: write
     steps:
@@ -37,6 +38,7 @@ jobs:
             Linux/packages/xtool-${{ matrix.host.arch }}.AppImage.zsync
   build-mac:
     runs-on: macos-26
+    timeout-minutes: 120
     permissions:
       contents: write
     steps:
@@ -69,6 +71,7 @@ jobs:
   release:
     needs: [build-linux, build-mac]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write
     env:

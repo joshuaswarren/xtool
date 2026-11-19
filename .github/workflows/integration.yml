@@ -1,8 +1,11 @@
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  # Disabled on this fork (joshuaswarren/xtool): the job's
+  # `ubuntu-on-macos` label is served by xtool-org's own self-hosted
+  # fleet (see the comment below), not by this account - 4 of the last
+  # 5 runs here sat queued past 12 hours and died, ~11,879
+  # runner-minutes of span in D1-shaped 30-day accounting. Manual
+  # dispatch only; see the commit.
+  workflow_dispatch
 concurrency:
   group: integration-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -10,6 +13,7 @@ jobs:
   integration-test-linux:
     # https://github.com/xtool-org/mac-actions-runner
     runs-on: ubuntu-on-macos
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v6
