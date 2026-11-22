@@ -444,6 +444,89 @@ struct SDKBuilder {
                 -o "$output"
         fi
 
+        # swiftc hands the SDK to clang as --sysroot, but clang only reads
+        # SDKSettings.json (and so the sdk component of -platform_version) from
+        # -isysroot or SDKROOT. With --sysroot it passes the deployment target
+        # twice: -platform_version <platform> <minos> <minos>. LC_BUILD_VERSION
+        # then records a build against the deployment target instead of the real
+        # SDK, and the OS keeps the app in compatibility mode. Put the bundle's SDK
+        # version back (omarchy-apple-dev#170, xtool-org/xtool#351).
+        platform_version_pos=
+        syslibroot=
+        i=0
+        prev=
+        for argument do
+            i=$((i + 1))
+            if [ "$prev" = "-platform_version" ]; then
+                platform_version_pos=$i
+            elif [ "$prev" = "-syslibroot" ]; then
+                syslibroot=$argument
+            fi
+            prev=$argument
+        done
+
+        if [ -n "$platform_version_pos" ]; then
+            minos=
+            sdk_stamp=
+            i=0
+            for argument do
+                i=$((i + 1))
+                case "$i" in
+                    $((platform_version_pos + 1))) minos=$argument ;;
+                    $((platform_version_pos + 2))) sdk_stamp=$argument ;;
+                esac
+            done
+
+            # sdk == minos is the broken signature: a real SDK version only equals
+            # the deployment target by accident, and rewriting it is a no-op then.
+            if [ -n "$sdk_stamp" ] && [ "$sdk_stamp" = "$minos" ]; then
+                real_sdk=
+                if [ -n "$syslibroot" ] && [ -f "$syslibroot/SDKSettings.json" ]; then
+                    real_sdk=$(sed -n 's/.*"Version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+                        "$syslibroot/SDKSettings.json" | head -n 1)
+                fi
+                if [ -z "$real_sdk" ]; then
+                    # no -syslibroot: fall back to the bundle's own SDK for the platform
+                    platform=
+                    i=0
+                    for argument do
+                        i=$((i + 1))
+                        [ "$i" -eq "$platform_version_pos" ] && platform=$argument
+                    done
+                    bundle_dir=${bin_dir%/toolset/bin}
+                    case "$platform" in
+                        ios)            platform_dir=iPhoneOS ;;
+                        ios-simulator)  platform_dir=iPhoneSimulator ;;
+                        macos)          platform_dir=MacOSX ;;
+                        *)              platform_dir= ;;
+                    esac
+                    if [ -n "$platform_dir" ]; then
+                        sdk_glob="$bundle_dir/Developer/Platforms/$platform_dir.platform/Developer/SDKs/$platform_dir"*.sdk
+                        for candidate in $sdk_glob; do
+                            [ -f "$candidate/SDKSettings.json" ] || continue
+                            candidate_version=$(sed -n 's/.*"Version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+                                "$candidate/SDKSettings.json" | head -n 1)
+                            [ -n "$candidate_version" ] && real_sdk=$candidate_version
+                        done
+                    fi
+                fi
+                if [ -n "$real_sdk" ]; then
+                    sdk_pos=$((platform_version_pos + 2))
+                    count=$#
+                    i=0
+                    while [ "$i" -lt "$count" ]; do
+                        i=$((i + 1))
+                        if [ "$i" -eq "$sdk_pos" ]; then
+                            set -- "$@" "$real_sdk"
+                        else
+                            set -- "$@" "$1"
+                        fi
+                        shift
+                    done
+                fi
+            fi
+        fi
+
         exec "$bin_dir/orig/ld64.lld" "$@"
         """.write(
             to: ld64,
